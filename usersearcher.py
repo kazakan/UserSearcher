@@ -1,10 +1,8 @@
-from gevent.pool import Pool
-from gevent import monkey
-monkey.patch_all()
-
+import argparse
 import requests
 import sys
 from functools import partial
+from multiprocessing import Pool
 
 
 # 'service name' : "link"
@@ -64,47 +62,44 @@ def username_exist_in_service(service,username,link=None):
     # services which redirect to other page when there's no userinfo
     if service in ['wordpress','weibo']:
         response = requests.get(_link,allow_redirects = False)
-        return response.status_code is 200
+        return response.status_code == 200
 
-    elif service is 'steam':
+    elif service == 'steam':
         return False
 
-    elif service is 'pinterest':
+    elif service == 'pinterest':
         return False
 
-    elif service is 'ebay':
+    elif service == 'ebay':
         return False
 
-    elif service is 'wikipedia':
+    elif service == 'wikipedia':
         return False
 
     # service can be determined by http status code
     else :
         response = requests.get(_link)
-        return response.status_code is 200
+        return response.status_code == 200
         
 
-def username_exist_in_services(username,use_gevent=False,service_names = services.keys(),include_none=False):
+def username_exist_in_services(username,use_multiprocess=False,service_names = services.keys(),include_none=False):
     result = {}
     if not len(username):
         print("username length is 0")
         return None
         
-    # do faster by using gevent
-    if use_gevent:
+    if use_multiprocess:
         uei = partial(username_exist_in_service,username = username)
 
         pol = Pool(len(service_names))
         exists = pol.map(uei, service_names)
         
-        i = 0
-        for service in service_names:
+        for i, service in enumerate(service_names):
             if exists[i]:
                 result[service] = services[service].format(username = username)
             else:
                 if include_none :
                     result[service] = None
-            i+=1
 
     else:
         for service, link in list(filter(lambda x:x[0] in service_names , services.items())):
@@ -131,8 +126,15 @@ def username_exist_in_services(username,use_gevent=False,service_names = service
 
 
 if __name__ == "__main__":
-    username = "dojh99"
-    result = username_exist_in_services(username,use_gevent=True)
+    parser = argparse.ArgumentParser(description='UserSearcher')
+    parser.add_argument('username',help='Username to search.')
+    parser.add_argument('--multiprocess','-m',type=bool,default=True,help='Option to use multiprocess method. Default value is True')
+    args = parser.parse_args()
+
+    username = args.username
+    use_multiprocess = args.multiprocess
+
+    result = username_exist_in_services(username,use_multiprocess=use_multiprocess)
 
     print("Search result with username ",username)
     for service, url in result.items():
